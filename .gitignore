@@ -1,0 +1,6 @@
+/build/
+/sdkconfig
+/sdkconfig.old
+/sdkconfig.local
+*.lrc
+!examples/ejemplo.lrc

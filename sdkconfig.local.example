@@ -1,0 +1,2 @@
+# Copia este archivo a sdkconfig.local y escribe una clave local de 8 a 63 caracteres.
+CONFIG_MP3_WIFI_PASSWORD=""

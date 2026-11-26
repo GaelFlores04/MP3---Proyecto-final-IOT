@@ -1,0 +1,10 @@
+menu "Reproductor MP3"
+
+config MP3_WIFI_PASSWORD
+    string "Clave WPA2 de la red local"
+    default ""
+    help
+        Escribe una clave local de 8 a 63 caracteres. Si queda vacía,
+        el firmware conserva el control BLE y deja el Wi-Fi apagado.
+
+endmenu

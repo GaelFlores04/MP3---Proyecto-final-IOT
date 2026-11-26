@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reproductor MP3</title>
+<style>
+    :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #14201d;
+        color: #edf3ee;
+        --fondo: #1b2b25;
+        --borde: #476055;
+        --texto-secundario: #bfd2c5;
+        --acento: #d6f4b0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(100% - 2rem, 58rem); margin: 2.75rem auto; }
+    .encabezado { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem 1rem; margin-bottom: 1.4rem; }
+    h1 { margin: 0; font-size: 1.45rem; font-weight: 690; }
+    #conexion { margin: 0; color: var(--texto-secundario); font-size: .875rem; }
+    .paneles { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.75rem; align-items: start; }
+    .display { background: var(--fondo); border: 1px solid var(--borde); padding: 1.4rem; border-radius: 1rem; }
+    .pista-cabecera { display: flex; justify-content: space-between; gap: .7rem; margin-bottom: 1.6rem; }
+    .pista-cabecera p { margin: 0; color: var(--texto-secundario); font-size: .85rem; }
+    #pista { margin: 0; font-size: 2rem; line-height: 1.08; letter-spacing: -.025em; font-weight: 730; overflow-wrap: anywhere; }
+    #artista { margin: .42rem 0 0; color: var(--texto-secundario); overflow-wrap: anywhere; }
+    .muted { color: var(--texto-secundario); }
+    .tiempos { display: flex; justify-content: space-between; gap: .75rem; margin-top: .45rem; font-size: .85rem; font-variant-numeric: tabular-nums; }
+    .avance { margin-top: 1.5rem; }
+    progress { display: block; width: 100%; height: .4rem; appearance: none; border: 0; border-radius: 1rem; overflow: hidden; background: #344b40; color: var(--acento); }
+    progress::-webkit-progress-bar { background: #344b40; }
+    progress::-webkit-progress-value { background: var(--acento); }
+    progress::-moz-progress-bar { background: var(--acento); }
+    .buttons { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: .55rem; margin-top: 1rem; }
+    button { min-height: 3.1rem; padding: .5rem .25rem; border: 1px solid #4e695e; border-radius: .75rem;
+             background: #23372e; color: inherit; font: inherit; font-weight: 630; cursor: pointer; }
+    button:hover:not(:disabled) { background: #314b3d; }
+    button:active:not(:disabled) { background: #3d594b; }
+    :focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; }
+    #play { background: var(--acento); color: #19251a; border-color: transparent; }
+    #play:hover:not(:disabled) { background: #e4ffc6; }
+    button:disabled { opacity: .48; cursor: default; }
+    .volume { display: grid; grid-template-columns: 3.1rem 1fr 3.1rem; align-items: center;
+              gap: .5rem; margin-top: 1.15rem; text-align: center; }
+    .volume button { font-size: 1.35rem; }
+    .volume output { display: block; font-variant-numeric: tabular-nums; }
+    #aviso-duracion { margin: 1rem 0 0; color: var(--texto-secundario); font-size: .875rem; }
+    #configurar-duracion { background: transparent; border: 0; min-height: 2.75rem; padding: 0 .2rem; color: var(--acento); text-decoration: underline; }
+    a { color: #d6f4b0; }
+    [hidden] { display: none !important; }
+    .pantalla { margin-top: 1.15rem; border-top: 1px solid var(--borde); padding-top: 1rem; }
+    h2 { margin: 0; font-size: 1.05rem; }
+    .cola { display: grid; gap: .4rem; margin-top: .65rem; max-height: 21rem; overflow-y: auto; padding: .22rem; }
+    .cola button { text-align: left; padding: .55rem .8rem; }
+    .cola button[aria-current="true"] { border-color: var(--acento); }
+    #letra-estado { margin: .45rem 0 0; font-size: .9rem; }
+    #pagina-letra { text-align: center; align-self: center; font-size: .9rem; }
+    details { margin-top: 1rem; }
+    summary { color: #d6f4b0; cursor: pointer; padding: .5rem 0; }
+    form { display: grid; gap: .65rem; margin-top: .65rem; }
+    form label { display: grid; gap: .2rem; font-size: .9rem; }
+    input, select, textarea { width: 100%; padding: .55rem; border: 1px solid #4e695e;
+                              border-radius: .45rem; color: inherit; background: #1d3029; font: inherit; }
+    textarea { resize: vertical; }
+    .album-selector { margin-top: .75rem; display: grid; gap: .3rem; }
+    .album-campos { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+    #ficha-estado { margin: 0; min-height: 1.4em; font-size: .9rem; }
+    .ayuda { margin: -.15rem 0 0; font-size: .8rem; color: var(--texto-secundario); }
+    @media (max-width: 680px) {
+        main { margin-top: 1.4rem; }
+        .paneles { grid-template-columns: minmax(0, 1fr); gap: 1.4rem; }
+        .display { padding: 1rem; }
+    }
+</style>
+</head>
+<body>
+<main>
+    <header class="encabezado">
+        <h1>Reproductor MP3</h1>
+        <p id="conexion" role="status">Conectando al ESP32…</p>
+        <a id="abrir-reproductor" href="http://192.168.4.1/" hidden>Abrir controlador en 192.168.4.1</a>
+    </header>
+    <div class="paneles">
+    <section class="display" aria-label="Reproducción">
+        <div class="pista-cabecera">
+            <p id="lista">Tarjeta microSD</p>
+            <p id="estado" role="status">En espera</p>
+        </div>
+        <h2 id="pista">Pista —</h2>
+        <p id="artista" hidden></p>
+        <div class="avance">
+            <progress id="progreso" value="0" max="1" aria-label="Avance de la canción"></progress>
+            <div class="tiempos"><span id="posicion">0:00</span><span id="duracion" class="muted">—</span></div>
+        </div>
+    <div class="buttons">
+        <button type="button" data-accion="anterior" disabled>Anterior</button>
+        <button type="button" id="play" data-accion="reproducir" disabled>Reproducir</button>
+        <button type="button" data-accion="siguiente" disabled>Siguiente</button>
+    </div>
+    <div class="volume">
+        <button type="button" data-accion="bajar" aria-label="Bajar volumen" disabled>−</button>
+        <div>Volumen <output id="volumen">—</output></div>
+        <button type="button" data-accion="subir" aria-label="Subir volumen" disabled>+</button>
+    </div>
+    <p id="aviso-duracion" hidden>
+        Guarda la duración del MP3 para activar el cambio de pista si el módulo no avisa que terminó.
+        <button id="configurar-duracion" type="button">Configurar pista</button>
+    </p>
+    </section>
+    <aside aria-labelledby="lista-titulo">
+        <h2 id="lista-titulo">Lista de reproducción</h2>
+        <label class="album-selector">Álbum
+            <select id="album-selector" disabled><option value="">Cargando álbumes…</option></select>
+        </label>
+        <div class="cola" id="cola" aria-label="Pistas del álbum"></div>
+        <details id="album-editor">
+            <summary>Agregar o editar un álbum</summary>
+            <form id="album-form">
+                <div class="album-campos">
+                    <label>Carpeta en la SD <input id="album-numero" type="number" min="1" max="99" required></label>
+                    <label>Cantidad de pistas <input id="album-pistas" type="number" min="1" max="255" required></label>
+                </div>
+                <label>Nombre en el celular <input id="album-nombre" maxlength="64" required></label>
+                <p class="ayuda">Escribe el número de la carpeta, por ejemplo 02. Numera los MP3 desde 001.</p>
+                <button id="guardar-album" type="submit" disabled>Guardar álbum</button>
+                <p id="album-estado" class="muted" role="status"></p>
+            </form>
+        </details>
+    <section class="pantalla" aria-labelledby="pantalla-titulo">
+        <h2 id="pantalla-titulo">Pantalla OLED</h2>
+        <p id="letra-estado" class="muted"></p>
+        <div class="buttons" id="paginas-letra" hidden>
+            <button type="button" data-accion="letra_ant" aria-label="Página anterior de la letra" disabled>Anterior</button>
+            <output id="pagina-letra"></output>
+            <button type="button" data-accion="letra_sig" aria-label="Página siguiente de la letra" disabled>Siguiente</button>
+        </div>
+        <details id="editor">
+            <summary>Editar datos de una pista</summary>
+            <form id="ficha">
+                <p id="ficha-album" class="ayuda"></p>
+                <label>Pista
+                    <select id="ficha-pista"></select>
+                </label>
+                <label>Título <input id="ficha-titulo" maxlength="60"></label>
+                <label>Artista <input id="ficha-artista" maxlength="60"></label>
+                <label>Duración
+                    <input id="ficha-duracion" placeholder="2:49" autocomplete="off" maxlength="10">
+                </label>
+                <label>Leer duración de un MP3
+                    <input id="ficha-mp3" type="file" accept=".mp3,audio/mpeg">
+                </label>
+                <p class="ayuda">Selecciona la misma versión que está en la microSD. El MP3 se queda en tu dispositivo.</p>
+                <label>Archivo de letra sincronizada <input id="ficha-archivo" type="file" accept=".lrc,.txt,text/plain"></label>
+                <label>Letra o marcas LRC
+                    <textarea id="ficha-letra" rows="5" maxlength="4096" placeholder="[00:12.50] Primer verso"></textarea>
+                </label>
+                <button id="guardar-ficha" type="submit" disabled>Guardar en el ESP32</button>
+                <p id="ficha-estado" class="muted" role="status"></p>
+            </form>
+        </details>
+    </section>
+    </aside>
+    </div>
+</main>
+<script>
+    const botones = [...document.querySelectorAll('button[data-accion]')];
+    const play = document.querySelector('#play');
+    const lista = document.querySelector('#lista');
+    const pista = document.querySelector('#pista');
+    const artistaActual = document.querySelector('#artista');
+    const estado = document.querySelector('#estado');
+    const progreso = document.querySelector('#progreso');
+    const posicion = document.querySelector('#posicion');
+    const duracion = document.querySelector('#duracion');
+    const avisoDuracion = document.querySelector('#aviso-duracion');
+    const configurarDuracion = document.querySelector('#configurar-duracion');
+    const volumen = document.querySelector('#volumen');
+    const conexion = document.querySelector('#conexion');
+    const paginasLetra = document.querySelector('#paginas-letra');
+    const paginaLetra = document.querySelector('#pagina-letra');
+    const letraEstado = document.querySelector('#letra-estado');
+    const listaAlbumes = document.querySelector('#album-selector');
+    const cola = document.querySelector('#cola');
+    const editorAlbum = document.querySelector('#album-editor');
+    const formularioAlbum = document.querySelector('#album-form');
+    const albumNumero = document.querySelector('#album-numero');
+    const albumPistas = document.querySelector('#album-pistas');
+    const albumNombre = document.querySelector('#album-nombre');
+    const albumEstado = document.querySelector('#album-estado');
+    const guardarAlbum = document.querySelector('#guardar-album');
+    const editor = document.querySelector('#editor');
+    const ficha = document.querySelector('#ficha');
+    const fichaPista = document.querySelector('#ficha-pista');
+    const fichaAlbumTexto = document.querySelector('#ficha-album');
+    const fichaTitulo = document.querySelector('#ficha-titulo');
+    const fichaArtista = document.querySelector('#ficha-artista');
+    const fichaDuracion = document.querySelector('#ficha-duracion');
+    const fichaMp3 = document.querySelector('#ficha-mp3');
+    const fichaLetra = document.querySelector('#ficha-letra');
+    const fichaArchivo = document.querySelector('#ficha-archivo');
+    const fichaEstado = document.querySelector('#ficha-estado');
+    const guardarFicha = document.querySelector('#guardar-ficha');
+    let datos;
+    let enviando = false;
+    let conectado = false;
+    let pendiente;
+    let fichaCargada = '';
+    let fichaAlbum = 0;
+    let guardando = false;
+    let numeroConsulta = 0;
+    let instanteEstado = 0;
+    let catalogo = [];
+    let leyendoAlbumes = false;
+    let guardandoAlbum = false;
+    let colaTotal = 0;
+
+    const carpeta = numero => String(numero).padStart(2, '0');
+    const archivo = numero => String(numero).padStart(3, '0');
+
+    async function solicitar(ruta, opciones = {}) {
+        const abortar = new AbortController();
+        const plazo = setTimeout(() => abortar.abort(), 4000);
+        try {
+            return await fetch(ruta, {...opciones, signal: abortar.signal});
+        } finally {
+            clearTimeout(plazo);
+        }
+    }
+
+    async function cargarAlbumes() {
+        if (leyendoAlbumes) return;
+        leyendoAlbumes = true;
+        try {
+            const respuesta = await solicitar('/albumes');
+            if (!respuesta.ok) throw new Error();
+            catalogo = await respuesta.json();
+            listaAlbumes.replaceChildren(...catalogo.map(album =>
+                new Option(album.nombre + ' · ' + carpeta(album.id), album.id)));
+        } catch {
+            albumEstado.textContent = 'No se pudo cargar la lista de álbumes.';
+        } finally {
+            leyendoAlbumes = false;
+            if (datos) {
+                listaAlbumes.value = datos.album;
+                listaAlbumes.disabled = !conectado || enviando || !catalogo.length;
+            }
+        }
+    }
+
+    const nombresEstado = {
+        'LISTO': 'Listo para reproducir',
+        'CARGANDO': 'Abriendo pista…',
+        'REPRODUCIENDO': 'Reproduciendo',
+        'EN PAUSA': 'En pausa',
+        'FIN DE LISTA': 'Fin de la lista',
+        'SIN CONFIRMAR': 'Tiempo estimado',
+    };
+
+    function formatoTiempo(ms, preciso = false) {
+        const segundos = Math.floor(ms / 1000);
+        const base = Math.floor(segundos / 60) + ':' + String(segundos % 60).padStart(2, '0');
+        return preciso ? base + '.' + String(ms % 1000).padStart(3, '0') : base;
+    }
+
+    function dibujarTiempo() {
+        if (!datos) return;
+        const avanza = conectado && ['REPRODUCIENDO', 'SIN CONFIRMAR'].includes(datos.estado);
+        const extra = avanza ? Math.min(performance.now() - instanteEstado, 1400) : 0;
+        const tiempo = Math.min(datos.posicionMs + extra, datos.duracionMs || Infinity);
+        posicion.textContent = formatoTiempo(tiempo);
+        duracion.textContent = datos.duracionMs ? formatoTiempo(datos.duracionMs) : '—';
+        progreso.hidden = !datos.duracionMs;
+        progreso.max = datos.duracionMs || 1;
+        progreso.value = datos.duracionMs ? tiempo : 0;
+    }
+
+    function actualizar() {
+        for (const boton of botones) boton.disabled = !conectado || enviando;
+        listaAlbumes.disabled = !conectado || enviando || !catalogo.length;
+        guardarAlbum.disabled = !conectado || guardandoAlbum;
+        configurarDuracion.disabled = !conectado;
+        if (!datos) return;
+
+        if (catalogo.some(album => album.id === datos.album)) listaAlbumes.value = datos.album;
+        if (colaTotal !== datos.total) {
+            cola.replaceChildren();
+            for (let n = 1; n <= datos.total; n++) {
+                const boton = document.createElement('button');
+                boton.type = 'button';
+                boton.dataset.pista = n;
+                boton.textContent = 'Pista ' + archivo(n);
+                boton.addEventListener('click', () => consultar('pista_' + n));
+                cola.append(boton);
+            }
+            colaTotal = datos.total;
+        }
+        lista.textContent = datos.pista + ' de ' + datos.total + ' pistas';
+        pista.textContent = datos.titulo || 'Pista ' + archivo(datos.pista);
+        artistaActual.textContent = datos.artista;
+        artistaActual.hidden = !datos.artista;
+        const etiqueta = nombresEstado[datos.estado] || datos.estado;
+        if (estado.textContent !== etiqueta) estado.textContent = etiqueta;
+        volumen.textContent = datos.volumen + ' / 30';
+        avisoDuracion.hidden = !conectado || !!datos.duracionMs;
+        for (const boton of cola.children) {
+            const seleccionada = Number(boton.dataset.pista) === datos.pista;
+            boton.disabled = !conectado || enviando;
+            boton.setAttribute('aria-current', seleccionada);
+            boton.textContent = seleccionada && datos.titulo ?
+                archivo(datos.pista) + ' · ' + datos.titulo : 'Pista ' + archivo(boton.dataset.pista);
+        }
+        const sonando = datos.estado === 'REPRODUCIENDO' || datos.estado === 'SIN CONFIRMAR';
+        paginasLetra.hidden = datos.sincronizada || !datos.paginas;
+        paginaLetra.textContent = datos.paginas ? datos.pagina + ' / ' + datos.paginas : 'Sin letra';
+        letraEstado.textContent = datos.sincronizada ? 'Letra sincronizada con la pista.' :
+            datos.paginas ? 'Letra con páginas manuales.' : 'Agrega un archivo .lrc a esta pista para sincronizar su letra.';
+        play.textContent = sonando ? 'Pausar' : datos.estado === 'EN PAUSA' ? 'Reanudar' : 'Reproducir';
+        play.dataset.accion = sonando ? 'pausar' : 'reproducir';
+        if (conectado && !enviando) {
+            play.disabled = datos.estado === 'CARGANDO';
+            botones.find(boton => boton.dataset.accion === 'bajar').disabled = datos.volumen === 0;
+            botones.find(boton => boton.dataset.accion === 'subir').disabled = datos.volumen === datos.maximo;
+            botones.find(boton => boton.dataset.accion === 'letra_ant').disabled = datos.pagina <= 1;
+            botones.find(boton => boton.dataset.accion === 'letra_sig').disabled = datos.pagina >= datos.paginas;
+        }
+        dibujarTiempo();
+    }
+
+    async function consultar(accion) {
+        if (enviando) {
+            if (accion) {
+                pendiente = accion;
+                actualizar();
+            }
+            return;
+        }
+        enviando = true;
+        if (accion) actualizar();
+        const abortar = new AbortController();
+        const plazo = setTimeout(() => abortar.abort(), 3000);
+        try {
+            const ruta = accion ? '/control?accion=' + encodeURIComponent(accion) : '/estado';
+            const respuesta = await fetch(ruta, {method: accion ? 'POST' : 'GET', signal: abortar.signal});
+            if (!respuesta.ok) throw new Error();
+            datos = await respuesta.json();
+            instanteEstado = performance.now();
+            conectado = true;
+            if (!catalogo.some(album => album.id === datos.album)) cargarAlbumes();
+            if (conexion.textContent !== 'Conectado al ESP32') conexion.textContent = 'Conectado al ESP32';
+        } catch {
+            conectado = false;
+            const aviso = 'Sin conexión. Comprueba la red Reproductor-MP3.';
+            if (conexion.textContent !== aviso) conexion.textContent = aviso;
+        } finally {
+            clearTimeout(plazo);
+            enviando = false;
+            actualizar();
+            if (pendiente) {
+                const siguiente = pendiente;
+                pendiente = undefined;
+                consultar(siguiente);
+            }
+        }
+    }
+
+    for (const boton of botones) {
+        boton.addEventListener('click', () => consultar(boton.dataset.accion));
+    }
+
+    listaAlbumes.addEventListener('change', () => consultar('album_' + listaAlbumes.value));
+    function mostrarConfiguracionAlbum() {
+        const album = catalogo.find(item => item.id === Number(albumNumero.value));
+        albumNombre.value = album?.nombre || '';
+        albumPistas.value = album?.pistas || '';
+    }
+    editorAlbum.addEventListener('toggle', () => {
+        if (!editorAlbum.open || albumNumero.value) return;
+        const libre = Array.from({length: 99}, (_, i) => i + 1)
+            .find(numero => !catalogo.some(album => album.id === numero));
+        albumNumero.value = libre || datos?.album || 1;
+        mostrarConfiguracionAlbum();
+    });
+    albumNumero.addEventListener('change', mostrarConfiguracionAlbum);
+    formularioAlbum.addEventListener('submit', async evento => {
+        evento.preventDefault();
+        if (!conectado || guardandoAlbum) return;
+        const nombre = albumNombre.value.trim();
+        if (!nombre || new TextEncoder().encode(nombre).length > 64) {
+            albumEstado.textContent = 'Escribe un nombre más corto para el álbum.';
+            return;
+        }
+        guardandoAlbum = true;
+        guardarAlbum.disabled = true;
+        try {
+            const ruta = '/albumes?album=' + albumNumero.value + '&pistas=' + albumPistas.value;
+            const respuesta = await solicitar(ruta, {method: 'POST', body: nombre});
+            if (!respuesta.ok) throw new Error();
+            await cargarAlbumes();
+            albumEstado.textContent = 'Álbum guardado. Elígelo en la lista.';
+            consultar();
+        } catch {
+            albumEstado.textContent = 'No se pudo guardar el álbum. Revisa los datos y la conexión.';
+        } finally {
+            guardandoAlbum = false;
+            guardarAlbum.disabled = !conectado;
+        }
+    });
+
+    function separarDuracion(texto) {
+        const tag = /^\[length:([^\]\n]*)\][ \t]*(?:\n|$)/gim;
+        const coincidencia = texto.matchAll(tag).next().value;
+        return {duracion: coincidencia?.[1].trim() || '', letra: texto.replace(tag, '').trim()};
+    }
+
+    function normalizarDuracion(texto) {
+        if (!texto) return '';
+        const partes = texto.match(/^(\d{1,3}):([0-5]\d)(?:[.:](\d{1,3}))?$/);
+        if (!partes || +partes[1] * 60 + +partes[2] < 1) return null;
+        return partes[1] + ':' + partes[2] + (partes[3] ? '.' + partes[3] : '');
+    }
+
+    async function cargarFicha() {
+        if (guardando || !fichaAlbum || !fichaPista.value) return;
+        const pistaElegida = fichaPista.value;
+        const solicitud = ++numeroConsulta;
+        fichaCargada = '';
+        fichaArchivo.value = '';
+        fichaMp3.value = '';
+        guardarFicha.disabled = true;
+        fichaArchivo.disabled = true;
+        fichaMp3.disabled = true;
+        fichaEstado.textContent = 'Cargando datos…';
+        try {
+            const respuesta = await fetch('/tema?album=' + fichaAlbum + '&pista=' + pistaElegida);
+            if (!respuesta.ok) throw new Error();
+            const texto = await respuesta.text();
+            if (solicitud !== numeroConsulta) return;
+            const primeraLinea = texto.indexOf('\n');
+            const segundaLinea = texto.indexOf('\n', primeraLinea + 1);
+            fichaTitulo.value = texto.slice(0, primeraLinea);
+            fichaArtista.value = texto.slice(primeraLinea + 1, segundaLinea);
+            const guardada = separarDuracion(texto.slice(segundaLinea + 1));
+            fichaLetra.value = guardada.letra;
+            fichaDuracion.value = guardada.duracion;
+            fichaCargada = pistaElegida;
+            guardarFicha.disabled = false;
+            fichaArchivo.disabled = false;
+            fichaMp3.disabled = false;
+            fichaEstado.textContent = '';
+        } catch {
+            if (solicitud === numeroConsulta) fichaEstado.textContent = 'No se pudieron cargar los datos. Vuelve a abrir el editor.';
+        }
+    }
+
+    function elegirFichaActual() {
+        if (!datos || guardando) return;
+        fichaAlbum = datos.album;
+        fichaAlbumTexto.textContent = catalogo.find(album => album.id === fichaAlbum)?.nombre ||
+            'Carpeta ' + carpeta(fichaAlbum);
+        fichaPista.replaceChildren(...Array.from({length: datos.total}, (_, i) =>
+            new Option(archivo(i + 1) + '.mp3', i + 1)));
+        fichaPista.value = datos.pista;
+        cargarFicha();
+    }
+
+    editor.addEventListener('toggle', () => {
+        if (editor.open && (!fichaCargada || fichaAlbum !== datos?.album)) elegirFichaActual();
+    });
+    configurarDuracion.addEventListener('click', () => {
+        if (!datos || guardando) return;
+        editor.open = true;
+        elegirFichaActual();
+        fichaDuracion.focus();
+    });
+    fichaPista.addEventListener('change', cargarFicha);
+    fichaArchivo.addEventListener('change', async () => {
+        const archivo = fichaArchivo.files[0];
+        const pistaElegida = fichaCargada;
+        if (!archivo || !pistaElegida || guardando) return;
+        try {
+            if (archivo.size > 4096) throw new Error('El archivo supera 4 KB.');
+            const contenido = (await archivo.text()).replace(/\r\n?/g, '\n').trim();
+            if (pistaElegida !== fichaCargada || archivo !== fichaArchivo.files[0]) return;
+            if (/\.lrc$/i.test(archivo.name) && !/^\s*\[\d{1,3}:[0-5]\d(?:[.:]\d{1,3})?\]/m.test(contenido)) {
+                throw new Error('El archivo .lrc no contiene marcas de tiempo válidas.');
+            }
+            const lrc = separarDuracion(contenido);
+            fichaLetra.value = lrc.letra;
+            if (lrc.duracion && !fichaDuracion.value) fichaDuracion.value = lrc.duracion;
+            const titulo = contenido.match(/^\[ti:([^\]\n]*)\]/im);
+            const artista = contenido.match(/^\[ar:([^\]\n]*)\]/im);
+            if (titulo && !fichaTitulo.value) fichaTitulo.value = titulo[1].trim().slice(0, 60);
+            if (artista && !fichaArtista.value) fichaArtista.value = artista[1].trim().slice(0, 60);
+            fichaEstado.textContent = 'Archivo listo. Pulsa Guardar en el ESP32.';
+        } catch (error) {
+            fichaEstado.textContent = error.message || 'No se pudo leer el archivo.';
+        }
+    });
+    fichaMp3.addEventListener('change', () => {
+        const archivo = fichaMp3.files[0];
+        const pistaElegida = fichaCargada;
+        if (!archivo || !pistaElegida || guardando) return;
+        const audio = document.createElement('audio');
+        const url = URL.createObjectURL(archivo);
+        let terminado = false;
+        const final = () => {
+            if (terminado) return;
+            terminado = true;
+            clearTimeout(plazo);
+            const ms = Math.round(audio.duration * 1000);
+            audio.removeAttribute('src');
+            URL.revokeObjectURL(url);
+            if (pistaElegida !== fichaCargada || archivo !== fichaMp3.files[0]) return;
+            if (Number.isFinite(ms) && ms >= 1000 && ms < 60000000) {
+                fichaDuracion.value = formatoTiempo(ms, true);
+                if (!fichaTitulo.value) {
+                    fichaTitulo.value = archivo.name.replace(/\.mp3$/i, '')
+                        .replace(/^\d{3}[\s._-]+/, '').slice(0, 60);
+                }
+                fichaEstado.textContent = 'Duración detectada. Pulsa Guardar en el ESP32.';
+            } else {
+                fichaEstado.textContent = 'Escribe la duración si el navegador no puede leer el MP3.';
+            }
+        };
+        const plazo = setTimeout(final, 8000);
+        fichaEstado.textContent = 'Leyendo la duración del MP3…';
+        audio.preload = 'metadata';
+        audio.addEventListener('loadedmetadata', final, {once: true});
+        audio.addEventListener('error', final, {once: true});
+        audio.src = url;
+    });
+    ficha.addEventListener('submit', async evento => {
+        evento.preventDefault();
+        if (guardando || fichaCargada !== fichaPista.value) return;
+        guardando = true;
+        guardarFicha.disabled = true;
+        fichaPista.disabled = true;
+        try {
+            const cruda = separarDuracion(fichaLetra.value);
+            const duracionGuardada = normalizarDuracion(fichaDuracion.value.trim() || cruda.duracion);
+            if (duracionGuardada === null) {
+                fichaEstado.textContent = 'Escribe la duración en minutos y segundos, por ejemplo 2:49.';
+                return;
+            }
+            const letraGuardada = duracionGuardada ? '[length:' + duracionGuardada + ']\n' + cruda.letra : cruda.letra;
+            const campos = [fichaTitulo.value.trim(), fichaArtista.value.trim(), letraGuardada];
+            const codificador = new TextEncoder();
+            if (campos.some((valor, i) => codificador.encode(valor).length > (i === 2 ? 4096 : 120))) {
+                fichaEstado.textContent = 'El título, el artista o la letra superan la longitud permitida.';
+                return;
+            }
+            const cuerpo = campos.join('\n');
+            const respuesta = await fetch('/tema?album=' + fichaAlbum + '&pista=' + fichaCargada,
+                {method: 'POST', body: cuerpo});
+            if (!respuesta.ok) throw new Error();
+            fichaEstado.textContent = 'Guardado en el ESP32.';
+            consultar();
+        } catch {
+            fichaEstado.textContent = 'No se pudo guardar. Revisa la conexión o reduce la longitud del texto.';
+        } finally {
+            guardando = false;
+            guardarFicha.disabled = false;
+            fichaPista.disabled = false;
+        }
+    });
+
+    if (location.protocol === 'file:') {
+        editor.hidden = true;
+        editorAlbum.hidden = true;
+        estado.textContent = 'Vista del archivo local';
+        conexion.textContent = 'Conéctate a la red Wi-Fi Reproductor-MP3 y abre la página del ESP32.';
+        document.querySelector('#abrir-reproductor').hidden = false;
+    } else {
+        consultar();
+        setInterval(() => consultar(), 700);
+        setInterval(dibujarTiempo, 250);
+    }
+</script>
+</body>
+</html>
